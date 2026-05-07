@@ -1,0 +1,44 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: fraud-detection-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:sentinelflow}
+    username: ${DB_USER:sentinelflow}
+    password: ${DB_PASSWORD:sentinelflow}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: fraud-detection-service
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      acks: all
+      enable-idempotence: true
+
+fraud:
+  model:
+    endpoint: ${AZURE_ML_ENDPOINT:http://localhost:9001/score}
+    api-key: ${AZURE_ML_API_KEY:dev-key}
+    threshold: ${FRAUD_THRESHOLD:0.75}
+  shap:
+    sidecar-url: ${SHAP_SIDECAR_URL:http://localhost:9000}
+    timeout-ms: ${SHAP_TIMEOUT_MS:2000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, metrics
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.sentinelflow: DEBUG
