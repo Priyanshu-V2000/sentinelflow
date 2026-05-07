@@ -1,0 +1,48 @@
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Spring Boot
+*.log
+spring.log
+
+# Node / React
+node_modules/
+dist/
+.next/
+.env
+.env.local
+.env.production
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets — NEVER commit these
+application-secrets.yml
+*.key
+*.pem
+*.p12
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
