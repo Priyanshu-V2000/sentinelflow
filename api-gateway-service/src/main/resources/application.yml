@@ -1,0 +1,85 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  cloud:
+    gateway:
+      routes:
+        - id: ingestion-service
+          uri: ${INGESTION_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/events/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                redis-rate-limiter.requestedTokens: 1
+
+        - id: analytics-service
+          uri: ${ANALYTICS_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/analytics/**
+
+        - id: fraud-service
+          uri: ${FRAUD_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/fraud/**
+
+        - id: ai-insight-service
+          uri: ${AI_INSIGHT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/insights/**
+
+        - id: user-tenant-service
+          uri: ${USER_TENANT_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/tenants/**, /api/v1/users/**, /api/v1/keys/**
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      ingestion-service:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+      fraud-service:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+
+jwt:
+  secret: ${JWT_SECRET:sentinelflow-dev-secret-change-in-production}
+  expiration-ms: ${JWT_EXPIRATION_MS:900000}
+
+logging:
+  level:
+    root: INFO
+    com.sentinelflow: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
