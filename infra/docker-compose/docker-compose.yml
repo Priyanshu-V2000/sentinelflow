@@ -1,0 +1,147 @@
+
+networks:
+  sentinelflow-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  prometheus_data:
+  grafana_data:
+
+services:
+
+  # ── PostgreSQL 16 with TimescaleDB + pgvector ─────────────────────────────
+  postgres:
+    image: ankane/pgvector:v0.5.1
+    container_name: sf-postgres
+    environment:
+      POSTGRES_DB: sentinelflow
+      POSTGRES_USER: sentinelflow
+      POSTGRES_PASSWORD: sentinelflow123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-extensions.sql:/docker-entrypoint-initdb.d/init-extensions.sql
+    networks:
+      - sentinelflow-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinelflow -d sentinelflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis 7.2 single node (Cluster comes in Phase 2) ─────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: sf-redis
+    command: redis-server --requirepass redis123 --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - sentinelflow-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Kafka 3.7 KRaft mode (no Zookeeper) ──────────────────────────────────
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: sf-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - sentinelflow-net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ── Kafka UI (view topics/messages in browser) ────────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: sf-kafka-ui
+    environment:
+      KAFKA_CLUSTERS_0_NAME: sentinelflow
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8090:8080"
+    networks:
+      - sentinelflow-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ── Jaeger (distributed tracing UI) ──────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: sf-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    networks:
+      - sentinelflow-net
+
+  # ── Prometheus (metrics scraping) ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: sf-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - sentinelflow-net
+
+  # ── Grafana (metrics dashboards) ──────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: sf-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    networks:
+      - sentinelflow-net
+    depends_on:
+      - prometheus
+
