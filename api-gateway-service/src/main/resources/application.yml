@@ -17,6 +17,10 @@ spring:
       connect-timeout: 5000
       timeout: 5000
 
+# JWT configuration
+jwt:
+  secret: sentinelflow-dev-secret-key-minimum-256-bits-long-padding-here
+
 management:
   endpoints:
     web:
