@@ -1,12 +1,27 @@
 server:
   port: 8080
-
 spring:
   application:
     name: api-gateway-service
   cloud:
     gateway:
-      routes: []
+      routes:
+        - id: ingestion-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/payments/**
+        - id: analytics-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/v1/analytics/**
+        - id: fraud-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/v1/fraud/**
+        - id: insight-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/v1/insights/**
     discovery:
       enabled: false
   data:
@@ -16,11 +31,8 @@ spring:
       password: redis123
       connect-timeout: 5000
       timeout: 5000
-
-# JWT configuration
 jwt:
   secret: sentinelflow-dev-secret-key-minimum-256-bits-long-padding-here
-
 management:
   endpoints:
     web:
@@ -32,7 +44,6 @@ management:
   health:
     redis:
       enabled: false
-
 logging:
   level:
     root: INFO
